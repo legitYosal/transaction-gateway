@@ -13,6 +13,8 @@ class GatewaySettings(BaseSettings):
 
     database_url: str
     ledger_service_url: str
+    logging_level: str = "INFO"
+    enable_docs: bool = True
 
 
 @lru_cache

@@ -2,11 +2,8 @@ from enum import Enum
 
 
 class TransactionJournalStatus(str, Enum):
-    RECEIVED = "received"
-    AUTHORIZED = "authorized"
     UPSTREAM_APPROVED = "upstream_approved"
     UPSTREAM_DECLINED = "upstream_declined"
-    FAILED = "failed"
 
 
 class UpstreamTransactionStatus(str, Enum):

@@ -14,7 +14,7 @@ class AuthorizedPrincipal:
 
 class FakeAuthClient:
     def authorize(self, authorization_header: str | None) -> AuthorizedPrincipal:
-        if authorization_header != "Bearer valid-token":
+        if not authorization_header.startswith('Bearer'):
             raise PermissionError("invalid token")
 
         return AuthorizedPrincipal(

@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Integer,
     JSON,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 
 from common.time import utcnow
+from .enums import OutboxStatus
 from .database import Base
 
 
@@ -94,7 +96,7 @@ class TransactionLedgerOutboxMessage(Base):
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
 
-    status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default=OutboxStatus.PENDING.value)
 
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_retry_at: Mapped[datetime] = mapped_column(
@@ -126,5 +128,11 @@ class TransactionLedgerOutboxMessage(Base):
             "event_type",
             "transaction_journal_id",
             name="uq_outbox_event_transaction_request",
+        ),
+        Index(
+            "ix_outbox_status_next_retry_at_created_at",
+            "status",
+            "next_retry_at",
+            "created_at",
         ),
     )

@@ -1,6 +1,11 @@
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from common.time import utcnow
+
+from .enums import OutboxStatus
 from .models import TransactionLedgerOutboxMessage, TransactionRequestJournal
 
 
@@ -32,12 +37,6 @@ class TransactionRequestJournalRepository:
             )
         )
 
-    def get_by_id(
-        self,
-        journal_id: str,
-    ) -> TransactionRequestJournal | None:
-        return self.db.get(TransactionRequestJournal, journal_id)
-
     def add(self, journal: TransactionRequestJournal) -> None:
         self.db.add(journal)
 
@@ -48,3 +47,42 @@ class TransactionLedgerOutboxRepository:
 
     def add(self, message: TransactionLedgerOutboxMessage) -> None:
         self.db.add(message)
+
+    def get_by_id(self, message_id: str) -> TransactionLedgerOutboxMessage | None:
+        return self.db.get(TransactionLedgerOutboxMessage, message_id)
+
+    def get_next_due_for_update(self) -> TransactionLedgerOutboxMessage | None:
+        return self.db.scalar(
+            select(TransactionLedgerOutboxMessage)
+            .where(
+                TransactionLedgerOutboxMessage.status.in_(
+                    [
+                        OutboxStatus.PENDING.value,
+                        OutboxStatus.FAILED.value,
+                    ]
+                ),
+                TransactionLedgerOutboxMessage.next_retry_at <= utcnow(),
+            )
+            .order_by(TransactionLedgerOutboxMessage.created_at)
+            .with_for_update(skip_locked=True)
+            .limit(1)
+        )
+
+    def get_stale_processing_for_update(
+        self,
+        *,
+        older_than: datetime,
+        limit: int = 20,
+    ) -> list[TransactionLedgerOutboxMessage]:
+        return list(
+            self.db.scalars(
+                select(TransactionLedgerOutboxMessage)
+                .where(
+                    TransactionLedgerOutboxMessage.status == OutboxStatus.PROCESSING.value,
+                    TransactionLedgerOutboxMessage.updated_at <= older_than,
+                )
+                .order_by(TransactionLedgerOutboxMessage.updated_at)
+                .with_for_update(skip_locked=True)
+                .limit(limit)
+            ).all()
+        )
