@@ -1,6 +1,6 @@
 services:
   postgres-gateway:
-    image: postgres:latest
+    image: postgres
     container_name: gateway-postgres
     environment:
       POSTGRES_DB: ${GATEWAY_POSTGRES_DB}
@@ -16,6 +16,23 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres-ledger:
+    image: postgres
+    container_name: ledger-postgres
+    environment:
+      POSTGRES_DB: ${LEDGER_POSTGRES_DB}
+      POSTGRES_USER: ${LEDGER_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LEDGER_POSTGRES_PASSWORD}
+    ports:
+      - "${LEDGER_POSTGRES_HOST_PORT}:5432"
+    volumes:
+      - ledger_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LEDGER_POSTGRES_USER} -d ${LEDGER_POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   gateway-api:
     build:
       context: .
@@ -24,8 +41,8 @@ services:
     environment:
       GATEWAY_DATABASE_URL: ${GATEWAY_DATABASE_URL}
       GATEWAY_LEDGER_SERVICE_URL: ${GATEWAY_LEDGER_SERVICE_URL}
-      GATEWAY_LOGGING_LEVEL: INFO
-      GATEWAY_ENABLE_DOCS: true
+      GATEWAY_LOGGING_LEVEL: ${GATEWAY_LOGGING_LEVEL}
+      GATEWAY_ENABLE_DOCS: ${GATEWAY_ENABLE_DOCS}
     ports:
       - "${GATEWAY_API_HOST_PORT}:8000"
     depends_on:
@@ -45,13 +62,36 @@ services:
     environment:
       GATEWAY_DATABASE_URL: ${GATEWAY_DATABASE_URL}
       GATEWAY_LEDGER_SERVICE_URL: ${GATEWAY_LEDGER_SERVICE_URL}
-      GATEWAY_LOGGING_LEVEL: INFO
-      GATEWAY_ENABLE_DOCS: false
+      GATEWAY_LOGGING_LEVEL: ${GATEWAY_LOGGING_LEVEL}
+      GATEWAY_ENABLE_DOCS: ${GATEWAY_ENABLE_DOCS}
     depends_on:
       postgres-gateway:
         condition: service_healthy
+      ledger-service:
+        condition: service_started
     command: >
       python -m services.gateway.worker
 
+  ledger-service:
+    build:
+      context: .
+      dockerfile: services/ledger/Dockerfile
+    container_name: ledger-service
+    environment:
+      LEDGER_DATABASE_URL: ${LEDGER_DATABASE_URL}
+      LEDGER_LOGGING_LEVEL: ${LEDGER_LOGGING_LEVEL}
+      LEDGER_ENABLE_DOCS: ${LEDGER_ENABLE_DOCS}
+    ports:
+      - "${LEDGER_API_HOST_PORT}:8000"
+    depends_on:
+      postgres-ledger:
+        condition: service_healthy
+    command: >
+      uvicorn services.ledger.main:app
+      --host 0.0.0.0
+      --port 8000
+      --no-access-log
+
 volumes:
   gateway_postgres_data:
+  ledger_postgres_data:
